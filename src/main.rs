@@ -1,7 +1,9 @@
+use csv::Writer;
+use open;
 use std::env;
 use std::error::Error;
+use std::io;
 use std::path::Path;
-use csv::Writer;
 use walkdir::WalkDir;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -26,11 +28,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
-    let mut wtr = Writer::from_path("mp3.csv")?;
+    let csv_file = format!("{}.csv", file_extension);
+
+    let mut wtr = Writer::from_path(&csv_file.clone())?;
 
     for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
         let p = entry.path();
-        if !p.is_file() {
+        if (!p.is_file()) {
             continue;
         }
 
@@ -40,6 +44,36 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     wtr.flush()?;
+
+    println!("View and edit file '{}' [Y/n]? ", csv_file);
+
+    let mut yes_no = String::new();
+
+    io::stdin()
+        .read_line(&mut yes_no)
+        .expect("Failed to read line");
+
+    match yes_no.trim() {
+        "Y" | "y" | "" => match open::that(csv_file.clone()) {
+            Ok(()) => println!("Opened '{}' successfully.", csv_file),
+            Err(err) => {
+                eprintln!("An error occurred when opening '{}': {}", csv_file, err);
+                if let Some(1) = err.raw_os_error() {
+                    eprintln!("Launcher failed with ExitStatus(1). Trying to open application selector...");
+                    match open::that_with("open", &csv_file) {
+                        Ok(()) => println!("Opened '{}' with application selector successfully.", csv_file),
+                        Err(err) => eprintln!("An error occurred when opening '{}' with application selector: {}", csv_file, err),
+                    }
+                }
+            },
+        },
+        "N" | "n" => {
+            println!("File not opened.");
+        }
+        _ => {
+            println!("Invalid input. File not opened.");
+        }
+    }
 
     Ok(())
 }
